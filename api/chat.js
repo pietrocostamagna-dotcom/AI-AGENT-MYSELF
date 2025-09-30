@@ -1,7 +1,5 @@
-// api/chat.js — Pure OpenAI proxy (POST only, no fallback) — CommonJS
-
+// api/chat.js — Pure OpenAI proxy (POST only)
 module.exports = async (req, res) => {
-  // CORS base
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -9,22 +7,13 @@ module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
   try {
-    // Body JSON
     let body = req.body;
-    if (typeof body === "string") {
-      try { body = JSON.parse(body); } catch { body = {}; }
-    }
-    if (!body) body = {};
-    const { message, systemPrompt } = body;
-
-    if (!message || typeof message !== "string") {
-      return res.status(400).send("Missing or invalid 'message'");
-    }
+    if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = {}; } }
+    const { message, systemPrompt } = body || {};
+    if (!message || typeof message !== "string") return res.status(400).send("Missing 'message'");
 
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey || !apiKey.startsWith("sk-")) {
-      return res.status(500).send("OPENAI_API_KEY not set on Vercel");
-    }
+    if (!apiKey || !apiKey.startsWith("sk-")) return res.status(500).send("OPENAI_API_KEY not set");
 
     const payload = {
       model: "gpt-4o-mini",
@@ -38,17 +27,12 @@ module.exports = async (req, res) => {
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
 
     const text = await r.text();
-    if (!r.ok) {
-      return res.status(r.status).send(text); // riporta errore esatto
-    }
+    if (!r.ok) return res.status(r.status).send(text);
 
     const data = JSON.parse(text);
     const reply = data?.choices?.[0]?.message?.content?.trim() || "";
@@ -58,5 +42,4 @@ module.exports = async (req, res) => {
   }
 };
 
-// runtime Node
 module.exports.config = { runtime: "nodejs20.x" };
